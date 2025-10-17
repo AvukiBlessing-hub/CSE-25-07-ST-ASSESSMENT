@@ -1,23 +1,81 @@
+require('dotenv').config();
 const express = require('express');
-const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
+const session = require('express-session');
+const MongoStore = require('connect-mongo');
+const passport = require('passport');
+const cors = require('cors');
 const path = require('path');
+const methodOverride = require('method-override');
+
+const signupRoutes = require('./routes/signupRoutes');
+const User = require('./models/signupModel');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3003;
 
-// --- CONFIGURATION ---
+// Use either MONGODB_URL or MONGODB_URI from .env
+const mongoUrl = process.env.MONGODB_URL || process.env.MONGODB_URI;
+
+mongoose.connect(mongoUrl, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => console.log('MongoDB connected successfully'))
+.catch(err => console.error('MongoDB connection error:', err));
+
 app.set('view engine', 'pug');
 app.set('views', path.join(__dirname, 'views'));
-app.use(bodyParser.urlencoded({ extended: true }));
+
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(methodOverride('_method'));
+
+app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
+app.use('/js', express.static(path.join(__dirname, 'public', 'js')));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- ROUTES ---
-const authRoutes = require('./routes/authRoutes');
-app.use('/', authRoutes); // all routes (/, /login, /signup)
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'avuki',
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: mongoUrl,
+    touchAfter: 24 * 3600
+  }),
+  cookie: {
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production'
+  }
+}));
 
-// --- START SERVER ---
-app.listen(PORT, () => {
-  console.log(`Server is running at http://localhost:${PORT}`);
-  console.log(`Signup: http://localhost:${PORT}/signup`);
-  console.log(`Login: http://localhost:${PORT}/login`);
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.use(User.createStrategy());
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
+
+app.use((req, res, next) => {
+  res.locals.currentUser = req.user;
+  next();
 });
+
+app.use('/', signupRoutes);
+
+app.use((req, res) => {
+  res.status(404).send('Page not found');
+});
+
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).send('Something went wrong!');
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
+
+module.exports = app;

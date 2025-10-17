@@ -1,63 +1,91 @@
-const emailInput = document.getElementById('email');
-const passwordInput = document.getElementById('password');
-const loginForm = document.getElementById('loginForm');
-const loginBox = document.getElementById('loginBox');
-const successMessage = document.getElementById('successMessage');
-const signupLink = document.getElementById('signupLink');
+const loginEmail = document.getElementById('loginEmail');
+const loginPassword = document.getElementById('loginPassword');
+const loginBtn = document.getElementById('loginBtn');
 
-// Handle input styling when user types
-emailInput.addEventListener('input', function() {
-    if (this.value.length > 0) {
-        this.classList.add('filled');
-        this.classList.remove('error');
+// Validation functions
+function validateEmailOrPhone(input) {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const phoneDigits = input.replace(/\D/g, '');
+  
+  // Check if it's a valid email or a valid phone (15 digits)
+  return emailRegex.test(input.trim()) || phoneDigits.length === 15;
+}
+
+function validatePassword(password) {
+  return password.length >= 6;
+}
+
+// Real-time validation on input
+loginEmail.addEventListener('input', () => {
+  if (loginEmail.value.length > 0) {
+    if (validateEmailOrPhone(loginEmail.value)) {
+      loginEmail.classList.remove('error');
     } else {
-        this.classList.remove('filled');
+      loginEmail.classList.add('error');
     }
+  } else {
+    loginEmail.classList.remove('error');
+  }
 });
 
-passwordInput.addEventListener('input', function() {
-    if (this.value.length > 0) {
-        this.classList.add('filled');
-        this.classList.remove('error');
+loginPassword.addEventListener('input', () => {
+  if (loginPassword.value.length > 0) {
+    if (validatePassword(loginPassword.value)) {
+      loginPassword.classList.remove('error');
     } else {
-        this.classList.remove('filled');
+      loginPassword.classList.add('error');
     }
+  } else {
+    loginPassword.classList.remove('error');
+  }
 });
 
-// Handle form submission
-loginForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const email = emailInput.value.trim();
-    const password = passwordInput.value.trim();
+loginBtn.addEventListener('click', async (e) => {
+  e.preventDefault();
+  
+  let hasError = false;
 
-    // Reset error states
-    emailInput.classList.remove('error');
-    passwordInput.classList.remove('error');
+  // Clear previous errors
+  loginEmail.classList.remove('error');
+  loginPassword.classList.remove('error');
 
-    // Validate inputs
-    if (email === '' || password === '') {
-        if (email === '') emailInput.classList.add('error');
-        if (password === '') passwordInput.classList.add('error');
-        return;
+  // Validate email or phone
+  if (!loginEmail.value.trim() || !validateEmailOrPhone(loginEmail.value)) {
+    loginEmail.classList.add('error');
+    hasError = true;
+  }
+
+  // Validate password
+  if (!loginPassword.value.trim() || !validatePassword(loginPassword.value)) {
+    loginPassword.classList.add('error');
+    hasError = true;
+  }
+
+  if (hasError) return;
+
+  try {
+    const response = await fetch('/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: loginEmail.value.trim(),
+        password: loginPassword.value
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      window.location.href = data.redirect || '/landing';
+    } else {
+      alert(data.message || 'Login failed. Please check your credentials.');
+      loginEmail.classList.add('error');
+      loginPassword.classList.add('error');
     }
-
-    // Show success message
-    loginBox.classList.add('hide');
-    successMessage.classList.add('show');
-
-    // Reset form after 3 seconds
-    setTimeout(function() {
-        loginBox.classList.remove('hide');
-        successMessage.classList.remove('show');
-        loginForm.reset();
-        emailInput.classList.remove('filled');
-        passwordInput.classList.remove('filled');
-    }, 3000);
-});
-
-// Handle signup link click
-signupLink.addEventListener('click', function(e) {
-    e.preventDefault();
-    alert('Signup functionality would be implemented here');
+  } catch (error) {
+    console.error('Error:', error);
+    alert('An error occurred. Please try again.');
+  }
 });
